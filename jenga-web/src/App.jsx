@@ -126,7 +126,7 @@ function navAllowedFor(role){
 // ─── MODÈLES IA par plan (façon Claude : gratuit = rapide, payant = puissant) ─
 const AI_TIERS = {
   fast:     { id:"claude-haiku-4-5-20251001",  label:"Rapide",   desc:"Génération rapide, idéale pour démarrer" },
-  balanced: { id:"claude-sonnet-4-20250514",   label:"Avancé",   desc:"Le meilleur équilibre qualité / vitesse" },
+  balanced: { id:"claude-haiku-4-5-20251001",   label:"Avancé",   desc:"Le meilleur équilibre qualité / vitesse" },
   power:    { id:"claude-opus-4-20250514",     label:"Puissant", desc:"Pour les projets les plus complexes" },
 };
 
@@ -345,7 +345,7 @@ async function translateVoicePrompt(text, sourceLang) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 500,
         messages: [{
           role: "user",
@@ -412,7 +412,7 @@ function speak(text, lang = "fr-FR") {
 
 const AI_MODELS = [
   { id:"fast",     name:"Rapide",   model:"claude-haiku-4-5-20251001", icon:"*", desc:"Génération rapide",        minPlan:"free" },
-  { id:"balanced", name:"Avancé",   model:"claude-sonnet-4-20250514",  icon:"", desc:"Le meilleur équilibre",   minPlan:"starter" },
+  { id:"balanced", name:"Avancé",   model:"claude-haiku-4-5-20251001",  icon:"", desc:"Le meilleur équilibre",   minPlan:"starter" },
   { id:"power",    name:"Puissant", model:"claude-opus-4-20250514",    icon:"", desc:"Pour les projets complexes", minPlan:"business" },
 ];
 // Ordre des plans pour savoir si un modèle est débloqué
