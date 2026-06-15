@@ -3337,7 +3337,25 @@ export default function App() {
       );
       setStreamText("");
       const clean = raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim();
-      const parsed = JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
+      let parsed;
+      try {
+        parsed = JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
+      } catch {
+        // Recovery: extract "code" field even from truncated JSON
+        const codeM = raw.match(/"code"\s*:\s*"([\s\S]*)/);
+        if (codeM) {
+          let code = codeM[1];
+          // Unescape JSON string encoding
+          code = code.replace(/\\n/g,'\n').replace(/\\t/g,'\t').replace(/\\"/g,'"').replace(/\\\\/g,'\\');
+          // Trim to last clean closing brace so JSX is valid
+          const lastBrace = Math.max(code.lastIndexOf('\n}'), code.lastIndexOf('};'));
+          if (lastBrace > 0) code = code.slice(0, lastBrace + 1);
+          const titleM = raw.match(/"title"\s*:\s*"([^"\\]*)"/);
+          parsed = { code, title: titleM?.[1] || "Application générée", description: "" };
+        } else {
+          throw new Error("Format de réponse invalide — réessaie avec une description plus courte.");
+        }
+      }
       if(job.genMode==="fullstack"){ if(!parsed.frontend) throw new Error("Pas de frontend."); parsed.code=parsed.frontend; }
       if(!parsed.code) throw new Error("Aucun code genere.");
       addLog("Succes !", 100);
