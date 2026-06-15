@@ -443,10 +443,14 @@ async function callAI(model, systemPrompt, userPrompt, maxTokens = 7000, onChunk
     const reader = resStream.body.getReader();
     const dec = new TextDecoder();
     let full = "";
+    let buf = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      for (const line of dec.decode(value).split("\n")) {
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop(); // keep incomplete trailing line in buffer
+      for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         const d = line.slice(6).trim();
         if (d === "[DONE]") continue;
@@ -3328,7 +3332,7 @@ export default function App() {
       const raw = await callAI(
         planModel, sys,
         "Genere une app PROFESSIONNELLE indistinguable d'une equipe senior. Min 3 vues, donnees africaines.\n\n"+job.prompt+ctx+africa+extras+businessMemory.context(),
-        job.genMode==="fullstack"?8000:7000,
+        job.genMode==="fullstack"?8000:8000,
         lowData ? undefined : (full) => { setStreamText(full); jobStore.update(job.id,{progress:Math.min(95,88+Math.floor(full.length/180))}); }
       );
       setStreamText("");
