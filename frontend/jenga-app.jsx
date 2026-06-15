@@ -113,10 +113,10 @@ const toCurrency = (fcfa, cur="XOF") => {
 // Ce filtre frontend ameliore l'experience mais ne remplace pas la securite backend.
 const ROLES = {
   owner:      { label:"Propriétaire", access:"all" },
-  director:   { label:"Directeur",    access:["builder","templates","dashboard","database","images","marketplace","advisors","business_memory","voice","community_feed","support","payments"] },
-  accountant: { label:"Comptable",    access:["dashboard","database","images","business_memory","support","payments"] },
-  hr:         { label:"RH",           access:["dashboard","advisors","business_memory","images","support"] },
-  sales:      { label:"Commercial",   access:["builder","templates","dashboard","advisors","images","community_feed","support"] },
+  director:   { label:"Directeur",    access:["home","dashboard","builder","templates","projects","images","marketplace","advisors","business_memory","community_feed","support","payments"] },
+  accountant: { label:"Comptable",    access:["home","dashboard","projects","images","business_memory","support","payments"] },
+  hr:         { label:"RH",           access:["home","dashboard","advisors","business_memory","images","support"] },
+  sales:      { label:"Commercial",   access:["home","dashboard","builder","templates","advisors","images","community_feed","support"] },
 };
 function navAllowedFor(role){
   const r = ROLES[role]; if(!r||r.access==="all") return null; // null = tout autorisé
@@ -2665,6 +2665,7 @@ function LegalDocModal({ title, onClose }) {
 
 // ─── Écran de consentement officiel JENGA — au premier lancement ─────────────
 function ConsentScreen({ onAccepted }) {
+  const { online, slow } = useNetwork();
   const [cgu,setCgu]=useState(false);
   const [privacy,setPrivacy]=useState(false);
   const [community,setCommunity]=useState(false);
@@ -2892,6 +2893,188 @@ function GlobalStyle() {
 // ═══════════════════════════════════════════════════════════════════════════
 // DASHBOARD VIEW
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// ACCUEIL NÉOPHYTE — un conseiller qui écoute le besoin et propose une route
+// ═══════════════════════════════════════════════════════════════════════════
+function AdvisorHome({ user, model, memCtx, onRoute, onCredit }) {
+  const isWide=useWide(720);
+  const [need,setNeed]=useState("");
+  const [thinking,setThinking]=useState(false);
+  const [plan,setPlan]=useState(null);   // { titre, explication, destination, action, exemple }
+  const [error,setError]=useState("");
+
+  // Les destinations possibles que le conseiller peut recommander
+  const DESTS={
+    builder:   { label:"Build Studio", desc:"créer une application ou un site web", view:"builder" },
+    design:    { label:"Executive Studio · Design", desc:"créer un logo ou un visuel", view:"images" },
+    docs:      { label:"Executive Studio · Documents", desc:"rédiger un document (contrat, devis, rapport…)", view:"images" },
+    excel:     { label:"Executive Studio · Tableaux", desc:"créer un budget ou un tableau", view:"images" },
+    advisors:  { label:"Directeurs IA", desc:"obtenir un conseil d'expert pour ton entreprise", view:"advisors" },
+  };
+
+  const analyze=async()=>{
+    if(!need.trim()||thinking)return;
+    if(onCredit && !onCredit(1)) return;
+    setThinking(true); setError(""); setPlan(null);
+    const sys=`Tu es le conseiller d'accueil de Jenga, une plateforme qui aide les entrepreneurs africains. Un utilisateur débutant te décrit son besoin ou son problème. Tu dois choisir LA meilleure solution Jenga parmi ces destinations :
+- "builder" : créer une application ou un site web (boutique en ligne, gestion, réservation...)
+- "design" : créer un logo, flyer, affiche, visuel
+- "docs" : rédiger un document (contrat, devis, facture, business plan, rapport, courrier)
+- "excel" : créer un budget, une trésorerie, un tableau de suivi
+- "advisors" : obtenir un conseil stratégique (commercial, marketing, finance...)
+Réponds UNIQUEMENT en JSON valide, sans texte autour, au format exact :
+{"destination":"builder|design|docs|excel|advisors","titre":"titre court et rassurant","explication":"2 phrases simples expliquant pourquoi cette solution répond à son besoin, sans jargon","exemple":"une phrase d'exemple concret de ce que Jenga va créer pour lui"}`+(memCtx||"");
+    try{
+      let raw=await callAI(model||MODEL, sys, "Besoin de l'utilisateur : "+need, 800);
+      raw=(raw||"").replace(/```json|```/g,"").trim();
+      const obj=JSON.parse(raw);
+      if(!DESTS[obj.destination]) obj.destination="builder";
+      setPlan(obj);
+    }catch(e){ setError("Je n'ai pas pu analyser ton besoin. Reformule en une phrase simple, ou choisis directement un studio dans le menu."); }
+    setThinking(false);
+  };
+
+  const confirm=()=>{ if(!plan)return; const d=DESTS[plan.destination]; onRoute(d.view, need); };
+
+  const SUGGEST=["Je veux vendre mes produits en ligne","J'ai besoin d'un logo pour ma boutique","Je dois faire un devis pour un client","Je veux suivre mes dépenses et mes revenus","Comment trouver plus de clients ?"];
+
+  return (
+    <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
+      <div style={{maxWidth:760,margin:"0 auto",padding:isWide?"52px 36px":"30px 18px",minHeight:"100%",display:"flex",flexDirection:"column"}}>
+        <div style={{textAlign:"center",marginBottom:26}}>
+          <div style={{width:64,height:64,borderRadius:20,background:`linear-gradient(135deg,${T.indigo},${T.navBg})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:T.shadowLg,color:"#fff"}}><Icon name="comments" size={30}/></div>
+          <div style={{fontSize:isWide?32:25,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.035em",lineHeight:1.12,marginBottom:12}}>Bonjour. Quel est votre besoin ?</div>
+          <div style={{fontSize:16,color:T.inkSoft,lineHeight:1.55,maxWidth:520,margin:"0 auto"}}>Décrivez simplement votre problème ou ce que vous voulez faire. Je vous guide vers la bonne solution — pas besoin de savoir par où commencer.</div>
+        </div>
+
+        <div style={{background:T.surface,border:`1.5px solid ${T.line}`,borderRadius:20,boxShadow:T.shadowLg,padding:isWide?"20px 20px 16px":"16px 16px 14px"}}>
+          <textarea value={need} onChange={e=>setNeed(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();analyze();}}} rows={isWide?3:4} placeholder="Ex : Je vends des vêtements et je veux que mes clients puissent commander sur internet…" style={{width:"100%",border:"none",outline:"none",resize:"none",fontSize:16,color:T.ink,fontFamily:FONT,lineHeight:1.6,background:"transparent",boxSizing:"border-box"}}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:10,gap:12}}>
+            <div style={{fontSize:12,color:T.inkFaint}}>Je choisis la meilleure solution pour vous.</div>
+            <button onClick={analyze} disabled={!need.trim()||thinking} style={{display:"flex",alignItems:"center",gap:8,padding:"11px 22px",background:need.trim()&&!thinking?T.ink:T.line,color:need.trim()&&!thinking?"#fff":T.inkFaint,border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:need.trim()&&!thinking?"pointer":"not-allowed",fontFamily:FONT_DISPLAY,transition:TRANS,whiteSpace:"nowrap"}}><Icon name="spark" size={16}/>{thinking?"J'analyse…":"M'aider"}</button>
+          </div>
+        </div>
+
+        {error&&<div style={{marginTop:16,padding:"12px 15px",background:T.redSoft,border:`1px solid ${T.red}33`,borderRadius:12,fontSize:13.5,color:T.red,lineHeight:1.5}}>{error}</div>}
+
+        {/* Recommandation du conseiller — à confirmer avant génération */}
+        {plan&&(
+          <div className="ab-rise" style={{marginTop:18,background:T.surface,border:`1px solid ${T.line}`,borderRadius:18,padding:"22px 24px",boxShadow:T.shadowMd}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:12}}>
+              <div style={{width:30,height:30,borderRadius:9,background:T.greenSoft,display:"flex",alignItems:"center",justifyContent:"center",color:T.green}}><Icon name="check" size={17}/></div>
+              <div style={{fontSize:12,fontWeight:700,color:T.green,textTransform:"uppercase",letterSpacing:"0.05em"}}>Voici ce que je vous propose</div>
+            </div>
+            <div style={{fontSize:19,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.02em",marginBottom:8}}>{plan.titre}</div>
+            <div style={{fontSize:14.5,color:T.inkSoft,lineHeight:1.6,marginBottom:14}}>{plan.explication}</div>
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 15px",background:T.indigoSoft,borderRadius:12,marginBottom:18}}>
+              <div style={{color:T.indigo,flexShrink:0}}><Icon name="spark" size={17}/></div>
+              <div style={{fontSize:13.5,color:T.indigo,lineHeight:1.5}}><strong>Destination :</strong> {DESTS[plan.destination].label}{plan.exemple?` — ${plan.exemple}`:""}</div>
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <button onClick={confirm} style={{flex:1,minWidth:180,padding:"13px",background:T.ink,color:"#fff",border:"none",borderRadius:12,fontSize:14.5,fontWeight:700,cursor:"pointer",fontFamily:FONT_DISPLAY,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon name="arrow" size={17}/>Oui, on y va</button>
+              <button onClick={()=>setPlan(null)} style={{padding:"13px 20px",background:T.surface,color:T.inkSoft,border:`1.5px solid ${T.line}`,borderRadius:12,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT_DISPLAY}}>Non, autre chose</button>
+            </div>
+          </div>
+        )}
+
+        {/* Suggestions pour démarrer */}
+        {!plan&&(
+          <div style={{marginTop:24}}>
+            <div style={{fontSize:12,fontWeight:700,color:T.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:12,textAlign:"center"}}>Ou commencez par un exemple</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:9,justifyContent:"center"}}>
+              {SUGGEST.map(s=>(
+                <button key={s} onClick={()=>setNeed(s)} style={{fontSize:13.5,fontWeight:600,color:T.inkSoft,background:T.surface,border:`1px solid ${T.line}`,padding:"9px 16px",borderRadius:30,cursor:"pointer",transition:TRANS}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.indigo;e.currentTarget.style.color=T.ink;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.line;e.currentTarget.style.color=T.inkSoft;}}>{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLEAU DE BORD — vue d'ensemble utile (stats, actions rapides, activité)
+// ═══════════════════════════════════════════════════════════════════════════
+function DashboardHome({ user, projects, onGo, onOpen }) {
+  const isWide=useWide(720);
+  const planName=PLANS.find(p=>p.id===user?.plan)?.name||"Découverte";
+  const online=projects.filter(p=>p.deployUrl).length;
+  const recent=[...projects].slice(0,4);
+  const stats=[
+    {label:"Projets créés",value:projects.length,color:T.indigo,icon:"layers"},
+    {label:"En ligne",value:online,color:T.green,icon:"spark"},
+    {label:"Crédits restants",value:user?.credits??0,color:T.gold,icon:"spark"},
+    {label:"Mon plan",value:planName,color:"#8B5CF6",icon:"card"},
+  ];
+  const actions=[
+    {t:"Créer une application",d:"Boutique, gestion, réservation…",view:"builder",c:T.indigo,icon:"spark"},
+    {t:"Créer un document ou visuel",d:"Logo, contrat, devis, présentation…",view:"images",c:T.gold,icon:"wand"},
+    {t:"Demander conseil",d:"Vos directeurs IA vous répondent",view:"advisors",c:"#0891B2",icon:"comments"},
+    {t:"Je ne sais pas par où commencer",d:"Laissez-vous guider",view:"home",c:T.green,icon:"comments"},
+  ];
+  const greeting=(()=>{ const h=new Date().getHours(); return h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir"; })();
+  return (
+    <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:isWide?"32px 36px":"24px 18px"}}>
+        <div style={{marginBottom:26}}>
+          <div style={{fontSize:isWide?30:24,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.035em"}}>{greeting}{user?.name?`, ${user.name.split(" ")[0]}`:""}.</div>
+          <div style={{fontSize:15,color:T.inkSoft,marginTop:5,lineHeight:1.55}}>Voici votre tableau de bord. Tout ce dont votre entreprise a besoin, au même endroit.</div>
+        </div>
+        {/* Stats */}
+        <div className="ab-stagger" style={{display:"grid",gridTemplateColumns:isWide?"repeat(4,1fr)":"1fr 1fr",gap:14,marginBottom:28}}>
+          {stats.map(s=>(
+            <div key={s.label} style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:16,padding:"18px 20px",boxShadow:T.shadowSm}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
+                <span style={{fontSize:11,color:T.inkFaint,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em"}}>{s.label}</span>
+                <span style={{color:s.color,opacity:0.85}}><Icon name={s.icon} size={16}/></span>
+              </div>
+              <div style={{fontSize:26,fontWeight:800,color:s.color,fontFamily:FONT_DISPLAY,letterSpacing:"-0.02em"}}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+        {/* Actions rapides */}
+        <div style={{fontSize:12,fontWeight:700,color:T.inkFaint,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:14}}>Que voulez-vous faire ?</div>
+        <div className="ab-stagger" style={{display:"grid",gridTemplateColumns:isWide?"repeat(2,1fr)":"1fr",gap:14,marginBottom:30}}>
+          {actions.map(a=>(
+            <button key={a.t} onClick={()=>onGo(a.view)} style={{textAlign:"left",background:T.surface,border:`1px solid ${T.line}`,borderRadius:16,padding:"20px 22px",cursor:"pointer",transition:TRANS,display:"flex",gap:15,alignItems:"center",boxShadow:T.shadowSm}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=T.shadowLg;}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=T.shadowSm;}}>
+              <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(145deg,${a.c},${a.c}D0)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 6px 16px ${a.c}40`}}><Icon name={a.icon} size={23}/></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15.5,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.01em",marginBottom:3}}>{a.t}</div>
+                <div style={{fontSize:13,color:T.inkSoft,lineHeight:1.5}}>{a.d}</div>
+              </div>
+              <div style={{color:a.c,flexShrink:0}}><Icon name="arrow" size={18}/></div>
+            </button>
+          ))}
+        </div>
+        {/* Activité récente */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:T.inkFaint,letterSpacing:"0.07em",textTransform:"uppercase"}}>Vos projets récents</div>
+          {projects.length>0&&<button onClick={()=>onGo("projects")} style={{background:"transparent",border:"none",color:T.indigo,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:FONT_DISPLAY}}>Tout voir</button>}
+        </div>
+        {recent.length===0?(
+          <div style={{background:T.surface,border:`1px dashed ${T.line}`,borderRadius:16,padding:"36px 20px",textAlign:"center"}}>
+            <div style={{fontSize:14,color:T.inkSoft,marginBottom:16}}>Vous n'avez pas encore de projet. Commencez maintenant.</div>
+            <button onClick={()=>onGo("builder")} style={{padding:"11px 22px",background:T.ink,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:FONT_DISPLAY}}>Créer mon premier projet</button>
+          </div>
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${isWide?250:150}px,1fr))`,gap:14}}>
+            {recent.map(p=>(
+              <button key={p.id} onClick={()=>onOpen(p)} style={{textAlign:"left",background:T.surface,border:`1px solid ${T.line}`,borderRadius:14,overflow:"hidden",cursor:"pointer",transition:TRANS,boxShadow:T.shadowSm,padding:0}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=T.shadowLg;}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=T.shadowSm;}}>
+                <div style={{height:90,background:`linear-gradient(135deg,${T.indigoSoft},${T.goldSoft})`,display:"flex",alignItems:"center",justifyContent:"center",color:T.indigo,opacity:0.85}}><Icon name="layers" size={28}/></div>
+                <div style={{padding:"12px 14px"}}>
+                  <div style={{fontSize:13.5,fontWeight:700,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
+                  <div style={{fontSize:11,color:T.inkFaint,marginTop:3}}>{p.time}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DashboardView({ user, projects, onOpen, onDelete, onNew, storageWarning }) {
   const [search,setSearch]=useState("");
   const isWide=useWide(720);
@@ -2964,7 +3147,7 @@ export default function App() {
   const [showOnboarding,setShowOnboarding]=useState(()=>!ls.get(ONBOARDING_KEY,false));
   const [streamText,setStreamText]=useState(""); // texte streamé en temps réel
   const [legalDoc,setLegalDoc]=useState(null);
-  const [view,setView]=useState("builder");
+  const [view,setView]=useState("home");
   const [navOpen,setNavOpen]=useState(false);
   const [prompt,setPrompt]=useState("");
   const [expertMode,setExpertMode]=useState(false);
@@ -3198,7 +3381,7 @@ export default function App() {
   if(!consented) return <><GlobalStyle/><ConsentScreen onAccepted={()=>setConsented(true)}/></>;
   if(!user) return <><GlobalStyle/><AuthScreen onAuth={async u=>{ if(backend.enabled()){ await backend.auth(u.id,u.email); } setUser(u); ls.set("ab7_user",u); }}/></>;
 
-  const NAV=[["builder","spark","Build Studio"],["templates","layers","Solutions"],["dashboard","folder","Projets"],["database","grid","Base de données"],["images","wand","Executive Studio"],["marketplace","grid","Agents"],["advisors","spark","Directeurs IA"],["business_memory","folder","Mon Entreprise"],["voice","mic","Voix"],["community_feed","folder","Communauté"],["support","comments","Aide & Support"],["payments","card","Paiements"]];
+  const NAV=[["home","spark","Accueil"],["dashboard","grid","Tableau de bord"],["builder","spark","Build Studio"],["templates","layers","Solutions"],["projects","folder","Projets"],["images","wand","Executive Studio"],["marketplace","grid","Agents"],["advisors","spark","Directeurs IA"],["business_memory","folder","Mon Entreprise"],["community_feed","folder","Communauté"],["support","comments","Aide & Support"],["payments","card","Paiements"]];
 
   return (
     <div style={{display:"flex",height:"100vh",background:T.surfaceAlt,fontFamily:FONT,overflow:"hidden",color:T.ink}}>
@@ -3292,11 +3475,13 @@ export default function App() {
               </div>
             </div>
           </div>
-        ):view==="database"?(
-          <DBDesigner/>
+        ):view==="home"?(
+          <AdvisorHome user={user} model={AI_TIERS[(user?.plan==="pro"||user?.plan==="business")?"power":(planData?.ai||"balanced")]?.id||MODEL} memCtx={businessMemory.context()} onCredit={(cost)=>{ if((user?.credits||0)<cost){ setNoCreditsFor({action:"advisor",cost}); return false; } setUser(u=>({...u,credits:Math.max(0,(u?.credits||0)-cost)})); return true; }} onRoute={(v,seed)=>{ if(v==="builder"){ setView("builder"); setPhase("idle"); if(seed){setPrompt(seed); setTimeout(()=>generate(seed),80);} } else { if(seed)setPrompt(seed); setView(v); } }}/>
         ):view==="images"?(
           <ImageStudio userPlan={user?.plan||"free"} model={AI_TIERS[(user?.plan==="pro"||user?.plan==="business")?"power":(planData?.ai||"balanced")]?.id||MODEL} memCtx={businessMemory.context()} onCredit={(cost)=>{ if((user?.credits||0)<cost){ setNoCreditsFor({action:"advisor",cost}); return false; } setUser(u=>({...u,credits:Math.max(0,(u?.credits||0)-cost)})); return true; }}/>
         ):view==="dashboard"?(
+          <DashboardHome user={user} projects={projects} onGo={(v)=>{ if(v==="builder"){setView("builder");setPhase("idle");setResult(null);setLiveCode(null);setPrompt("");} else setView(v); }} onOpen={openProject}/>
+        ):view==="projects"?(
           <DashboardView user={user} projects={projects} storageWarning={storageWarning} onOpen={openProject} onDelete={id=>setProjects(prev=>prev.filter(p=>p.id!==id))} onNew={()=>{setView("builder");setPhase("idle");setResult(null);setLiveCode(null);setPrompt("");}}/>
         ):view==="marketplace"?(
           <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
@@ -3320,36 +3505,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        ):view==="voice"?(
-          <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
-            <div style={{maxWidth:820,margin:"0 auto",padding:isWide?"32px 36px":"24px 18px"}}>
-              <div style={{marginBottom:6}}><div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em"}}>Dictée vocale africaine</div><div style={{fontSize:14,color:T.inkSoft,marginTop:4,lineHeight:1.55}}>Décris ton application dans ta langue. Jenga comprend et traduit.</div></div>
-              <div style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:16,padding:24,marginTop:22,marginBottom:18}}>
-                <div style={{fontSize:16,fontWeight:700,color:T.ink,marginBottom:4,fontFamily:FONT_DISPLAY}}>Essaie maintenant</div>
-                <div style={{fontSize:13,color:T.inkSoft,marginBottom:16}}>Appuie sur le micro et parle. Ton prompt sera traduit automatiquement.</div>
-                <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-                  <div style={{flex:1}}>
-                    <div style={{padding:"12px 15px",background:T.surfaceAlt,border:`1.5px solid ${T.line}`,borderRadius:10,fontSize:14,color:prompt?T.ink:T.inkFaint,minHeight:58,lineHeight:1.6}}>{prompt||(AFRICAN_LANGUAGES.find(l=>l.code===voiceLang)?.hint||"Parle…")}</div>
-                    {originalVoice&&<div style={{marginTop:8,fontSize:12,color:T.inkSoft}}><strong>{AFRICAN_LANGUAGES.find(l=>l.code===voiceLang)?.name}:</strong> "{originalVoice}"</div>}
-                  </div>
-                  <VoiceButton currentLang={voiceLang} onLangChange={setVoiceLang} onTranslating={setVoiceTranslating} onTranscript={(tr,or,lg)=>{setPrompt(tr);setOriginalVoice(lg!=="fr"&&lg!=="en"?or:"");}}/>
-                </div>
-                {prompt&&<button onClick={()=>{setView("builder");setTimeout(()=>generate(),100);}} style={{marginTop:15,padding:"11px 24px",background:T.ink,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:FONT_DISPLAY}}>Générer cette app →</button>}
-              </div>
-              <div style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:16,padding:24}}>
-                <div style={{fontSize:16,fontWeight:700,color:T.ink,marginBottom:16,fontFamily:FONT_DISPLAY}}>{AFRICAN_LANGUAGES.length} langues supportées</div>
-                <div style={{display:"grid",gridTemplateColumns:isWide?"1fr 1fr":"1fr",gap:10}}>
-                  {AFRICAN_LANGUAGES.map(l=>(
-                    <button key={l.code} onClick={()=>setVoiceLang(l.code)} style={{padding:"14px 16px",background:voiceLang===l.code?T.indigoSoft:T.surfaceAlt,border:`1.5px solid ${voiceLang===l.code?T.indigo:T.line}`,borderRadius:12,cursor:"pointer",textAlign:"left",transition:TRANS}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span style={{fontSize:20}}>{l.flag}</span><span style={{fontSize:14,fontWeight:700,color:voiceLang===l.code?T.indigo:T.ink}}>{l.name}</span>{voiceLang===l.code&&<span style={{marginLeft:"auto"}}><Badge color={T.indigo} soft={T.indigoSoft}>Actif</Badge></span>}</div>
-                      <div style={{fontSize:11,color:T.inkFaint}}>{l.region}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-                ):view==="business_memory"?(
+        ):view==="business_memory"?(
           <div style={{flex:1,overflow:"auto",padding:isWide?"32px 36px":"24px 18px",background:T.surfaceAlt}}>
             <div style={{maxWidth:680,margin:"0 auto"}}>
               <div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em",marginBottom:5}}>Mon Entreprise</div>
