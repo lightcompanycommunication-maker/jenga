@@ -2775,7 +2775,7 @@ function ConsentScreen({ onAccepted }) {
           zIndex:500,textDecoration:"none",fontSize:24,transition:TRANS}}
         onMouseEnter={e=>e.currentTarget.style.transform="scale(1.12)"}
         onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-        
+
       </a>    </>
   );
 }
@@ -3741,7 +3741,7 @@ export default function App() {
                 <div style={{fontSize:13,color:T.inkSoft,marginBottom:16}}>1 visuel chez un graphiste coûte 5 000 à 15 000 FCFA. Ici, à partir de 70 F.</div>
                 <div style={{display:"grid",gridTemplateColumns:isWide?"repeat(3,1fr)":"1fr",gap:12}}>
                   {VISUAL_PACKS.map(pk=><div key={pk.visuals} style={{padding:18,background:pk.best?"#FCEEFF":T.surfaceAlt,border:`1.5px solid ${pk.best?"#E879F9":pk.popular?"#E879F966":T.line}`,borderRadius:12,cursor:"pointer",position:"relative"}}>{pk.best&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)"}}><Badge color="#C026D3" soft={T.surface}>Meilleure offre</Badge></div>}{pk.popular&&!pk.best&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)"}}><Badge color={T.green} soft={T.surface}>Populaire</Badge></div>}<div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em"}}>{pk.visuals}</div><div style={{fontSize:12,color:T.inkFaint,marginBottom:8}}>visuels</div><div style={{fontSize:16,fontWeight:700,color:T.ink}}>{fmt(pk.price)} F</div><div style={{fontSize:11,color:pk.best?"#C026D3":T.inkFaint,marginTop:4,fontWeight:pk.best?700:400}}>{pk.per} F / visuel{pk.per<100?` · −${Math.round((1-pk.per/100)*100)}%`:""}</div></div>)}
-                
+
               {/* Parrainage — gagne des crédits (comme Dropbox/Lovable) */}
               <div style={{marginTop:18,background:`linear-gradient(135deg,${T.indigoSoft},#fff)`,border:`1px solid ${T.indigo}33`,borderRadius:16,padding:24}}>
                 <div style={{fontSize:16,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,marginBottom:4}}>Parraine, gagne des credits</div>
