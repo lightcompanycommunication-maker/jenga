@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { Readable } from "stream";
-import { generateApp, resolveModel, resolveMaxTokens, extractJson } from "./ai.js";
+import { generateApp, resolveModel, resolveMaxTokens } from "./ai.js";
 
 const app = express();
 const PORT = 3001;
@@ -54,7 +53,21 @@ app.post("/api/anthropic/messages", async (req, res) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("X-Accel-Buffering", "no");
-      Readable.fromWeb(upstream.body).pipe(res);
+      res.flushHeaders();
+      const reader = upstream.body.getReader();
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+        } catch (err) {
+          console.error("[stream error]", err.message);
+        } finally {
+          res.end();
+        }
+      })();
     } else {
       const data = await upstream.json();
       res.status(upstream.status).json(data);
