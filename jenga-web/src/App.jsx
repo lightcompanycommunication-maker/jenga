@@ -433,7 +433,7 @@ async function callAI(model, systemPrompt, userPrompt, maxTokens = 7000, onChunk
   const directModel = isGPT ? MODEL : chosenModel;
   // Streaming SSE — texte au fur et à mesure, comme ChatGPT
   if (onChunk) {
-    const resStream = await fetch("https://api.anthropic.com/v1/messages", {
+    const resStream = await fetch("/api/anthropic/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: directModel, max_tokens: maxTokens, stream: true,
@@ -456,7 +456,7 @@ async function callAI(model, systemPrompt, userPrompt, maxTokens = 7000, onChunk
     return full;
   }
   // Sans streaming (appels utilitaires internes)
-  const resSync = await fetch("https://api.anthropic.com/v1/messages", {
+  const resSync = await fetch("/api/anthropic/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: directModel, max_tokens: maxTokens, system: systemPrompt,
