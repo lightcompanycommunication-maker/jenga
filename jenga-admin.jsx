@@ -70,6 +70,19 @@ const api = {
   }
 };
 
+// ─── Catalogue des API à configurer (une à une, interconnecté au backend) ─────
+const API_CATALOG = [
+  { id:"anthropic",  name:"Anthropic (Claude)", env:"ANTHROPIC_API_KEY",  cat:"Intelligence",  required:true,  cost:"~57 F / génération",  desc:"Génération de texte, code, documents et analyses.", placeholder:"sk-ant-...", docs:"https://console.anthropic.com" },
+  { id:"openai",     name:"OpenAI",             env:"OPENAI_API_KEY",     cat:"Intelligence",  required:true,  cost:"variable",            desc:"Génération d'images et de visuels.", placeholder:"sk-...", docs:"https://platform.openai.com" },
+  { id:"replicate",  name:"Replicate",          env:"REPLICATE_API_TOKEN",cat:"Images",        required:false, cost:"20-60 F / image",     desc:"Modèles d'image alternatifs (Flux, Ideogram).", placeholder:"r8_...", docs:"https://replicate.com" },
+  { id:"supabase",   name:"Supabase",           env:"SUPABASE_URL + KEY", cat:"Données",       required:true,  cost:"Gratuit → payant",    desc:"Base de données, authentification et stockage.", placeholder:"https://xxxx.supabase.co | clé service", docs:"https://supabase.com" },
+  { id:"vercel",     name:"Vercel",             env:"VERCEL_TOKEN",       cat:"Déploiement",   required:false, cost:"Gratuit",             desc:"Déploiement des sites et apps web générés.", placeholder:"Token Vercel", docs:"https://vercel.com" },
+  { id:"expo",       name:"Expo EAS",           env:"EXPO_TOKEN",         cat:"Déploiement",   required:false, cost:"~30$/mois",           desc:"Build des APK / AAB Android.", placeholder:"Token Expo", docs:"https://expo.dev" },
+  { id:"cinetpay",   name:"CinetPay",           env:"CINETPAY_KEY + SITE",cat:"Paiement",      required:true,  cost:"% commission",        desc:"Paiements Mobile Money en Afrique francophone.", placeholder:"API key | Site ID", docs:"https://cinetpay.com" },
+  { id:"flutterwave",name:"Flutterwave",        env:"FLUTTERWAVE_SECRET", cat:"Paiement",      required:false, cost:"% commission",        desc:"Paiements panafricains (cartes, Mobile Money).", placeholder:"FLWSECK-...", docs:"https://flutterwave.com" },
+  { id:"resend",     name:"Resend",             env:"RESEND_API_KEY",     cat:"Communication", required:false, cost:"Gratuit → payant",    desc:"Emails transactionnels et reçus.", placeholder:"re_...", docs:"https://resend.com" },
+];
+
 // ─── Mock data (actif si backend non configuré) ───────────────────────────────
 const MOCK = {
   stats: {
@@ -200,6 +213,7 @@ const TABS = [
   { id: "revenue",   label: "Revenus" },
   { id: "credits",   label: "Crédits" },
   { id: "plans",     label: "Plans" },
+  { id: "apis",      label: "Configuration API" },
   { id: "support",   label: "Support" },
   { id: "broadcast", label: "Annonces" },
   { id: "system",    label: "Système & API" },
@@ -217,6 +231,40 @@ function AdminDashboard({ onLogout }) {
   const [sideOpen, setSideOpen] = useState(true);
   const [bcTarget, setBcTarget] = useState("Tous");
   const [bcMsg, setBcMsg] = useState("");
+  // ── Configuration API (chaque service configurable un à un, interconnecté) ──
+  const [apiCfg, setApiCfg] = useState(() => {
+    const init = {};
+    API_CATALOG.forEach(s => { init[s.id] = { value: "", saved: false, status: s.required ? "missing" : "optional", testing: false }; });
+    return init;
+  });
+  const setApiField = (id, value) => setApiCfg(c => ({ ...c, [id]: { ...c[id], value, saved: false } }));
+  const saveApiKey = async (svc) => {
+    const cur = apiCfg[svc.id];
+    if (!cur || !cur.value.trim()) { showToast("Entre une clé avant d'enregistrer", A.red); return; }
+    // Interconnexion backend : envoie la clé au serveur si configuré, sinon mode local
+    if (api.enabled()) {
+      try { await api.post("/admin/config/api", { service: svc.id, env: svc.env, key: cur.value.trim() }); }
+      catch (e) { showToast("Échec de l'enregistrement côté serveur", A.red); return; }
+    }
+    setApiCfg(c => ({ ...c, [svc.id]: { ...c[svc.id], saved: true, status: "active" } }));
+    showToast(`${svc.name} enregistré${api.enabled() ? " sur le serveur" : " (local)"}`);
+  };
+  const testApiKey = async (svc) => {
+    const cur = apiCfg[svc.id];
+    if (!cur || !cur.value.trim()) { showToast("Entre une clé avant de tester", A.red); return; }
+    setApiCfg(c => ({ ...c, [svc.id]: { ...c[svc.id], testing: true } }));
+    try {
+      if (api.enabled()) { await api.post("/admin/config/api/test", { service: svc.id }); }
+      else { await new Promise(r => setTimeout(r, 700)); } // simulation locale
+      setApiCfg(c => ({ ...c, [svc.id]: { ...c[svc.id], testing: false, status: "active" } }));
+      showToast(`${svc.name} : connexion réussie`);
+    } catch (e) {
+      setApiCfg(c => ({ ...c, [svc.id]: { ...c[svc.id], testing: false, status: "error" } }));
+      showToast(`${svc.name} : test échoué`, A.red);
+    }
+  };
+  const apiConfigured = Object.values(apiCfg).filter(c => c.status === "active").length;
+  const apiRequired = API_CATALOG.filter(s => s.required).length;
   const w = useWindowWidth();
   const isWide = w >= 960;
 
@@ -253,33 +301,51 @@ function AdminDashboard({ onLogout }) {
   return (
     <div style={{ minHeight: "100vh", background: A.bg, display: "flex", fontFamily: FONT, color: A.ink }}>
 
+      {/* ── Overlay : clic en dehors du panneau pour le rétracter ── */}
+      {sideOpen && (
+        <div onClick={() => setSideOpen(false)} style={{ position: "fixed", inset: 0, background: isWide ? "transparent" : "rgba(0,0,0,0.45)", zIndex: 99 }} />
+      )}
+
       {/* ── Sidebar ── */}
-      <div style={{ width: isWide ? 220 : (sideOpen ? 220 : 0), background: A.surface, borderRight: `1px solid ${A.border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden", transition: "width .2s", position: isWide ? "relative" : "fixed", top: 0, left: 0, bottom: 0, zIndex: 100 }}>
-        {/* Brand */}
-        <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${A.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: `linear-gradient(140deg,${A.navy},#16205C)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="22" height="22" viewBox="0 0 100 100"><path d="M50 14 L78 30 L78 70 L50 86 L22 70 L22 30 Z" fill={A.gold} /><path d="M46 36 L58 36 L58 58 Q58 67 49.5 67 Q42 67 41 59.5 L47.5 59.5 Q48.5 61 50 61 Q51 61 51 58 L51 42 L46 42 Z" fill={A.navy} /></svg>
+      <div style={{ width: sideOpen ? 220 : 0, background: A.surface, borderRight: sideOpen ? `1px solid ${A.border}` : "none", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden", transition: "width .25s", position: isWide ? "relative" : "fixed", top: 0, left: 0, bottom: 0, zIndex: 100 }}>
+        {/* Brand + Toggle */}
+        <div style={{ padding: sideOpen ? "24px 20px 16px" : "20px 8px 16px", borderBottom: `1px solid ${A.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {sideOpen && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: `linear-gradient(140deg,${A.navy},#16205C)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="22" height="22" viewBox="0 0 100 100"><path d="M50 14 L78 30 L78 70 L50 86 L22 70 L22 30 Z" fill={A.gold} /><path d="M46 36 L58 36 L58 58 Q58 67 49.5 67 Q42 67 41 59.5 L47.5 59.5 Q48.5 61 50 61 Q51 61 51 58 L51 42 L46 42 Z" fill={A.navy} /></svg>
+              </div>
+              <div><div style={{ fontSize: 15, fontWeight: 800, color: A.ink }}>Jenga</div><div style={{ fontSize: 10, color: A.gold, fontWeight: 700, letterSpacing: "1px" }}>ADMIN</div></div>
             </div>
-            <div><div style={{ fontSize: 15, fontWeight: 800, color: A.ink }}>Jenga</div><div style={{ fontSize: 10, color: A.gold, fontWeight: 700, letterSpacing: "1px" }}>ADMIN PANEL</div></div>
-          </div>
+          )}
+          {isWide && (
+            <button onClick={() => setSideOpen(s => !s)} title={sideOpen ? "Réduire" : "Développer"} style={{ background: "none", border: "none", color: A.inkSoft, cursor: "pointer", fontSize: 18, padding: "4px 6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {sideOpen ? "‹" : "›"}
+            </button>
+          )}
         </div>
         {/* Nav */}
         <div style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
-          {TABS.map(t => <button key={t.id} onClick={() => { setTab(t.id); if (!isWide) setSideOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: tab === t.id ? A.navy + "33" : "transparent", border: tab === t.id ? `1px solid ${A.navy}55` : "1px solid transparent", borderRadius: 10, color: tab === t.id ? A.gold : A.inkSoft, cursor: "pointer", fontSize: 13.5, fontWeight: tab === t.id ? 700 : 400, marginBottom: 3, textAlign: "left" }}>
-            {t.label}
-          </button>)}
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); if (!isWide) setSideOpen(false); }} title={sideOpen ? "" : t.label} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: sideOpen ? "flex-start" : "center", gap: 10, padding: "11px 14px", background: tab === t.id ? A.navy + "33" : "transparent", border: tab === t.id ? `1px solid ${A.navy}55` : "1px solid transparent", borderRadius: 10, color: tab === t.id ? A.gold : A.inkSoft, cursor: "pointer", fontSize: 13.5, fontWeight: tab === t.id ? 700 : 400, marginBottom: 3, textAlign: sideOpen ? "left" : "center" }}>
+              {sideOpen ? t.label : <span style={{ fontSize: 16 }}>•</span>}
+            </button>
+          ))}
         </div>
         {/* Footer */}
         <div style={{ padding: "12px 8px", borderTop: `1px solid ${A.border}` }}>
-          <div style={{ padding: "8px 14px", background: A.surfaceAlt, borderRadius: 10, marginBottom: 8 }}>
-            <div style={{ fontSize: 11, color: A.inkFaint }}>Connecté en tant qu'</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: A.gold }}>Administrateur</div>
-            <div style={{ fontSize: 11, color: A.inkFaint }}>Lionel Eric SAMSON</div>
-          </div>
-          <button onClick={onLogout} style={{ width: "100%", padding: "10px 14px", background: A.redSoft, border: `1px solid ${A.red}33`, borderRadius: 10, color: A.red, cursor: "pointer", fontSize: 13, fontWeight: 600, textAlign: "left" }}>
-            Se déconnecter
-          </button>
+          {sideOpen && (
+            <>
+              <div style={{ padding: "8px 14px", background: A.surfaceAlt, borderRadius: 10, marginBottom: 8, fontSize: 10.5 }}>
+                <div style={{ fontSize: 11, color: A.inkFaint }}>Admin</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: A.gold }}>Lionel E.</div>
+              </div>
+              <button onClick={onLogout} style={{ width: "100%", padding: "10px 14px", background: A.redSoft, border: `1px solid ${A.red}33`, borderRadius: 10, color: A.red, cursor: "pointer", fontSize: 13, fontWeight: 600, textAlign: "left" }}>
+                Déco
+              </button>
+            </>
+          )}
+          {!sideOpen && <button onClick={onLogout} title="Se déconnecter" style={{ width: "100%", padding: "8px", background: A.redSoft, border: `1px solid ${A.red}33`, borderRadius: 10, color: A.red, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>⊗</button>}
         </div>
       </div>
 
@@ -288,7 +354,8 @@ function AdminDashboard({ onLogout }) {
         {/* Topbar */}
         <div style={{ background: A.surface, borderBottom: `1px solid ${A.border}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {!isWide && <button onClick={() => setSideOpen(s => !s)} style={{ background: "none", border: "none", color: A.inkSoft, cursor: "pointer", fontSize: 20 }}>Menu</button>}
+            {!isWide && <button onClick={() => setSideOpen(s => !s)} style={{ background: "none", border: "none", color: A.inkSoft, cursor: "pointer", fontSize: 20, padding: "4px" }}>☰</button>}
+            {isWide && <button onClick={() => setSideOpen(s => !s)} title={sideOpen ? "Réduire le panneau" : "Développer le panneau"} style={{ background: "none", border: "none", color: A.inkSoft, cursor: "pointer", fontSize: 18, padding: "4px 8px" }}>{sideOpen ? "‹" : "›"}</button>}
             <div style={{ fontSize: 16, fontWeight: 700, color: A.ink }}>{TABS.find(t => t.id === tab)?.label}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -540,6 +607,65 @@ function AdminDashboard({ onLogout }) {
               <button onClick={() => { if(bcMsg.trim()){ setToast(`Annonce envoyée à : ${bcTarget}`); setBcMsg(""); } }} disabled={!bcMsg.trim()} style={{ marginTop: 14, padding: "11px 22px", background: bcMsg.trim()?A.navy:A.border, color: bcMsg.trim()?"#fff":A.inkFaint, border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: bcMsg.trim()?"pointer":"not-allowed" }}>Envoyer l'annonce</button>
             </div>
             <div style={{ fontSize: 12.5, color: A.inkFaint, maxWidth: 680, lineHeight: 1.6 }}>Les annonces envoyées apparaîtront ici une fois le backend connecté (historique des campagnes, taux d'ouverture).</div>
+          </>}
+
+          {/* ══ CONFIGURATION API ══ */}
+          {tab === "apis" && <>
+            <div style={{ display: "grid", gridTemplateColumns: isWide ? "repeat(3,1fr)" : "1fr", gap: 14, marginBottom: 22 }}>
+              <Stat label="Services actifs" value={apiConfigured} color={A.green} />
+              <Stat label="Services requis" value={apiRequired} color={A.gold} />
+              <Stat label="Total services" value={API_CATALOG.length} color={A.blue} />
+            </div>
+            <div style={{ marginBottom: 18, padding: "13px 18px", background: api.enabled() ? A.greenSoft : A.blueSoft, border: `1px solid ${api.enabled() ? A.green : A.blue}44`, borderRadius: 12, fontSize: 13, color: api.enabled() ? A.green : A.blue, lineHeight: 1.6 }}>
+              {api.enabled()
+                ? `Backend connecté : les clés sont envoyées et stockées en sécurité sur ${BACKEND_URL}.`
+                : "Backend non configuré : les clés saisies ici sont gardées localement pour test. Renseigne BACKEND_URL (ligne 9) pour les enregistrer réellement côté serveur."}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {["Intelligence","Images","Données","Déploiement","Paiement","Communication"].map(cat => {
+                const items = API_CATALOG.filter(s => s.cat === cat);
+                if (!items.length) return null;
+                return (
+                  <div key={cat}>
+                    <div style={{ fontSize: 11.5, fontWeight: 800, color: A.inkFaint, letterSpacing: "0.07em", textTransform: "uppercase", margin: "4px 2px 10px" }}>{cat}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {items.map(svc => {
+                        const c = apiCfg[svc.id] || {};
+                        const stColor = c.status === "active" ? A.green : c.status === "error" ? A.red : c.status === "optional" ? "#888" : A.gold;
+                        const stLabel = c.status === "active" ? "Actif" : c.status === "error" ? "Échec" : c.status === "optional" ? "Optionnel" : "À configurer";
+                        return (
+                          <div key={svc.id} style={{ background: A.surface, border: `1px solid ${A.border}`, borderRadius: 14, padding: "18px 20px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+                              <span style={{ width: 10, height: 10, borderRadius: "50%", background: stColor, flexShrink: 0 }} />
+                              <div style={{ flex: 1, minWidth: 180 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: 14.5, fontWeight: 700, color: A.ink }}>{svc.name}</span>
+                                  {svc.required && <span style={{ fontSize: 10, fontWeight: 700, color: A.gold, background: A.goldSoft, padding: "2px 8px", borderRadius: 20 }}>Requis</span>}
+                                </div>
+                                <div style={{ fontSize: 12.5, color: A.inkFaint, marginTop: 2 }}>{svc.desc}</div>
+                              </div>
+                              <div style={{ textAlign: "right" }}>
+                                <Badge color={stColor} bg={c.status === "active" ? A.greenSoft : c.status === "error" ? A.redSoft : A.surfaceAlt}>{stLabel}</Badge>
+                                <div style={{ fontSize: 11, color: A.inkFaint, marginTop: 4 }}>{svc.cost}</div>
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: A.inkSoft, marginBottom: 7 }}>
+                              Variable : <code style={{ fontFamily: FONT_MONO, color: A.blue }}>{svc.env}</code>
+                              <a href={svc.docs} target="_blank" rel="noopener noreferrer" style={{ color: A.gold, marginLeft: 10, textDecoration: "none", fontWeight: 600 }}>Obtenir la clé →</a>
+                            </div>
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                              <input type="password" value={c.value || ""} onChange={e => setApiField(svc.id, e.target.value)} placeholder={svc.placeholder} style={{ flex: 1, minWidth: 200, padding: "11px 14px", background: A.surfaceAlt, border: `1.5px solid ${A.border}`, borderRadius: 10, fontSize: 13, color: A.ink, outline: "none", fontFamily: FONT_MONO }} />
+                              <button onClick={() => testApiKey(svc)} disabled={c.testing} style={{ padding: "11px 16px", background: A.surface, color: A.ink, border: `1.5px solid ${A.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: c.testing ? "wait" : "pointer", whiteSpace: "nowrap" }}>{c.testing ? "Test…" : "Tester"}</button>
+                              <button onClick={() => saveApiKey(svc)} style={{ padding: "11px 18px", background: c.saved ? A.green : A.navy, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>{c.saved ? "Enregistré" : "Enregistrer"}</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </>}
 
           {/* ══ SYSTÈME & API ══ */}

@@ -1,0 +1,146 @@
+import { config } from "../config.js";
+
+/**
+ * Génération de code via l'API Anthropic (Claude), côté serveur.
+ * La clé reste secrète ici ; le front n'appelle jamais Anthropic directement.
+ */
+
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+
+// Plafond réel de sortie. Une app/site complet en JSON dépasse souvent 4000 tokens :
+// c'était la cause des coupures ("Unterminated string in JSON" / génération interrompue).
+const MAX_OUTPUT_TOKENS = 16000;
+
+// Mapping de tous les anciens noms vers les modèles réellement disponibles
+const MODEL_MAP = {
+  "claude-sonnet-4-20250514":  "claude-sonnet-4-5-20250929",
+  "claude-opus-4-20250514":    "claude-opus-4-5-20251101",
+  "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
+  "claude-opus-4-5":           "claude-opus-4-5-20251101",
+  "claude-sonnet-4-5":         "claude-sonnet-4-5-20250929",
+  "claude-haiku-4-5":          "claude-haiku-4-5-20251001",
+  "claude-3-5-sonnet-20241022":"claude-sonnet-4-5-20250929",
+  "claude-3-5-haiku-20241022": "claude-haiku-4-5-20251001",
+  "claude-3-opus-20240229":    "claude-opus-4-5-20251101",
+};
+
+/**
+ * Tente d'extraire un objet JSON valide depuis le texte renvoyé par le modèle.
+ * Si le JSON est tronqué (réponse coupée), on essaie de le réparer en fermant
+ * les chaînes/objets/tableaux laissés ouverts, plutôt que de planter.
+ */
+function extractJson(raw) {
+  let clean = (raw || "")
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  // On part du premier "{" trouvé
+  const start = clean.indexOf("{");
+  if (start === -1) throw new Error("Aucun objet JSON trouvé dans la réponse.");
+  clean = clean.slice(start);
+
+  // 1) Tentative directe
+  try { return JSON.parse(clean); } catch (_) {}
+
+  // 2) Tentative de réparation d'un JSON tronqué
+  const repaired = repairTruncatedJson(clean);
+  return JSON.parse(repaired); // si ça échoue encore, l'appelant gère l'erreur
+}
+
+/**
+ * Ferme proprement un JSON coupé en plein milieu :
+ * - termine une chaîne ouverte
+ * - referme les objets {} et tableaux [] encore ouverts
+ * On ignore les guillemets et accolades situés à l'intérieur des chaînes.
+ */
+function repairTruncatedJson(s) {
+  const stack = [];      // pile de "{" et "["
+  let inString = false;
+  let escaped = false;
+  let lastCharIdx = -1;  // dernière position "utile" (hors espaces de fin)
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!/\s/.test(ch)) lastCharIdx = i;
+
+    if (inString) {
+      if (escaped) { escaped = false; }
+      else if (ch === "\\") { escaped = true; }
+      else if (ch === '"') { inString = false; }
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+
+  // On coupe tout résidu après le dernier caractère utile
+  let out = s.slice(0, lastCharIdx + 1);
+
+  // Si on s'est arrêté en pleine chaîne, on la ferme
+  if (inString) out += '"';
+
+  // Retire une virgule de fin éventuelle (", " puis fin) qui rendrait le JSON invalide
+  out = out.replace(/,\s*$/, "");
+
+  // Referme dans l'ordre inverse ce qui reste ouvert
+  for (let i = stack.length - 1; i >= 0; i--) {
+    out += stack[i] === "{" ? "}" : "]";
+  }
+  return out;
+}
+
+export async function generateApp({ prompt, systemPrompt, maxTokens = 7000, model }) {
+  if (!config.anthropic.apiKey) throw new Error("ANTHROPIC_API_KEY non configurée.");
+
+  // Respecte le modèle demandé (via le mapping), sinon Haiku par défaut.
+  const useModel = (model && MODEL_MAP[model]) || DEFAULT_MODEL;
+
+  // Respecte le maxTokens demandé, borné par le plafond de sortie réel.
+  const safeMaxTokens = Math.min(Math.max(Number(maxTokens) || 7000, 1000), MAX_OUTPUT_TOKENS);
+
+  console.log(`[AI] model=${useModel} maxTokens=${safeMaxTokens} (requested=${maxTokens}, original=${model})`);
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": config.anthropic.apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: useModel,
+      max_tokens: safeMaxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Anthropic: ${await res.text()}`);
+
+  const data = await res.json();
+  const raw = data.content?.map((b) => b.text || "").join("") || "";
+
+  // Si la réponse a été coupée, on tente quand même de récupérer un JSON exploitable.
+  if (data.stop_reason === "max_tokens") {
+    console.warn("[AI] Réponse tronquée (max_tokens). Tentative de réparation du JSON…");
+    try {
+      return extractJson(raw);
+    } catch (_) {
+      throw new Error(
+        "L'application demandée est trop volumineuse pour être générée en une seule fois. " +
+        "Essaie une description plus ciblée (ex: 'une caisse simple' plutôt que 'un système POS complet avec admin'), " +
+        "ou divise ton projet en plusieurs écrans."
+      );
+    }
+  }
+
+  try {
+    return extractJson(raw);
+  } catch (e) {
+    throw new Error(
+      `La réponse du modèle n'a pas pu être lue comme du JSON valide. Réessaie, idéalement avec une description un peu plus courte. (détail: ${e.message})`
+    );
+  }
+}

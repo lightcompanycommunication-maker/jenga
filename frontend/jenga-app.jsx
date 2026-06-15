@@ -113,8 +113,8 @@ const toCurrency = (fcfa, cur="XOF") => {
 // Ce filtre frontend ameliore l'experience mais ne remplace pas la securite backend.
 const ROLES = {
   owner:      { label:"Propriétaire", access:"all" },
-  director:   { label:"Directeur",    access:["home","dashboard","builder","templates","projects","images","marketplace","advisors","business_memory","community_feed","support","payments"] },
-  accountant: { label:"Comptable",    access:["home","dashboard","projects","images","business_memory","support","payments"] },
+  director:   { label:"Directeur",    access:["home","dashboard","builder","templates","images","marketplace","advisors","business_memory","community_feed","support","payments"] },
+  accountant: { label:"Comptable",    access:["home","dashboard","images","business_memory","support","payments"] },
   hr:         { label:"RH",           access:["home","dashboard","advisors","business_memory","images","support"] },
   sales:      { label:"Commercial",   access:["home","dashboard","builder","templates","advisors","images","community_feed","support"] },
 };
@@ -2775,7 +2775,7 @@ function ConsentScreen({ onAccepted }) {
           zIndex:500,textDecoration:"none",fontSize:24,transition:TRANS}}
         onMouseEnter={e=>e.currentTarget.style.transform="scale(1.12)"}
         onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-
+        
       </a>    </>
   );
 }
@@ -2881,12 +2881,73 @@ function GlobalStyle() {
     .ab-stagger>*:nth-child(8){animation-delay:0.31s}
     @keyframes abfadeview{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .ab-fade-view{animation:abfadeview 0.32s ${EASE} both}
+    @keyframes abword{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+    .ab-word{display:inline-block;opacity:0;animation:abword .26s ${EASE} forwards}
     .ab-lift{transition:${TRANS}}
     .ab-lift:hover{transform:translateY(-3px)}
     @media (prefers-reduced-motion: reduce){
       *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}
     }
   `}</style>;
+}
+
+// Aperçu miniature varié pour les cartes Templates (4 variantes : dashboard, liste, boutique, agenda)
+function TemplatePreview({ color, letter, variant=0 }) {
+  const bg=`linear-gradient(135deg,${color}14,${color}06)`;
+  const Wrap=(children)=>(
+    <div style={{height:118,background:bg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+      <div style={{width:"100%",maxWidth:200,background:"#fff",borderRadius:11,boxShadow:"0 6px 18px rgba(14,22,51,0.12)",overflow:"hidden",border:`1px solid ${color}1F`}}>
+        <div style={{height:20,background:color,display:"flex",alignItems:"center",padding:"0 9px",gap:5}}>
+          <span style={{width:11,height:11,borderRadius:4,background:"rgba(255,255,255,0.85)",color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,fontFamily:FONT_DISPLAY}}>{letter}</span>
+          <span style={{flex:1,height:4,borderRadius:2,background:"rgba(255,255,255,0.4)"}}/>
+        </div>
+        <div style={{padding:"9px 10px"}}>{children}</div>
+      </div>
+    </div>
+  );
+  const bar=(w,c=color,o=1)=><div style={{height:6,borderRadius:3,background:c,opacity:o,width:w}}/>;
+  if(variant===0){ // dashboard : KPIs + graphe
+    return Wrap(<>
+      <div style={{display:"flex",gap:6,marginBottom:8}}>
+        {[0.9,0.6,0.75].map((h,i)=><div key={i} style={{flex:1,background:color+"12",borderRadius:6,padding:"6px 5px"}}><div style={{height:4,width:"60%",borderRadius:2,background:color,marginBottom:4}}/><div style={{height:7,width:"85%",borderRadius:2,background:color,opacity:0.35}}/></div>)}
+      </div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:30}}>
+        {[0.4,0.7,0.45,0.9,0.6,1,0.55].map((h,i)=><div key={i} style={{flex:1,height:`${h*100}%`,borderRadius:"3px 3px 0 0",background:color,opacity:0.55+h*0.4}}/>)}
+      </div>
+    </>);
+  }
+  if(variant===1){ // liste / CRM
+    return Wrap(<div style={{display:"flex",flexDirection:"column",gap:7}}>
+      {[1,2,3].map(i=><div key={i} style={{display:"flex",alignItems:"center",gap:7}}><span style={{width:16,height:16,borderRadius:"50%",background:color,opacity:0.25,flexShrink:0}}/><div style={{flex:1}}>{bar("70%",color,0.8)}<div style={{height:4}}/>{bar("45%",color,0.3)}</div><span style={{width:18,height:8,borderRadius:4,background:color,opacity:0.3}}/></div>)}
+    </div>);
+  }
+  if(variant===2){ // boutique : grille produits
+    return Wrap(<>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
+        {[0,1,2,3,4,5].map(i=><div key={i} style={{aspectRatio:"1",borderRadius:6,background:color,opacity:0.15+((i%3)*0.12)}}/>)}
+      </div>
+      <div style={{height:9,borderRadius:5,background:color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{width:"40%",height:3,borderRadius:2,background:"rgba(255,255,255,0.7)"}}/></div>
+    </>);
+  }
+  // variant 3 : agenda / réservation
+  return Wrap(<div style={{display:"flex",flexDirection:"column",gap:5}}>
+    <div style={{display:"flex",gap:4}}>{[0,1,2,3,4].map(i=><div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:5,borderRadius:2,background:color,opacity:0.3}}/></div>)}</div>
+    {[0,1,2].map(r=><div key={r} style={{display:"flex",gap:4}}>{[0,1,2,3,4].map(i=><div key={i} style={{flex:1,height:11,borderRadius:3,background:color,opacity:(r===1&&i===2)||(r===0&&i===4)?0.85:0.12}}/>)}</div>)}
+  </div>);
+}
+
+
+function FadeWords({ text, animate=true, step=28 }) {
+  if(!animate) return <>{text}</>;
+  const words=String(text).split(/(\s+)/); // garde les espaces
+  return (
+    <>
+      {words.map((w,i)=> /^\s+$/.test(w)
+        ? w
+        : <span key={i} className="ab-word" style={{animationDelay:`${i*step}ms`}}>{w}</span>
+      )}
+    </>
+  );
 }
 
 
@@ -2996,11 +3057,12 @@ Réponds UNIQUEMENT en JSON valide, sans texte autour, au format exact :
 // ═══════════════════════════════════════════════════════════════════════════
 // TABLEAU DE BORD — vue d'ensemble utile (stats, actions rapides, activité)
 // ═══════════════════════════════════════════════════════════════════════════
-function DashboardHome({ user, projects, onGo, onOpen }) {
+function DashboardHome({ user, projects, onGo, onOpen, onDelete }) {
   const isWide=useWide(720);
+  const [showAll,setShowAll]=useState(false);
   const planName=PLANS.find(p=>p.id===user?.plan)?.name||"Découverte";
   const online=projects.filter(p=>p.deployUrl).length;
-  const recent=[...projects].slice(0,4);
+  const recent=showAll?[...projects]:[...projects].slice(0,4);
   const stats=[
     {label:"Projets créés",value:projects.length,color:T.indigo,icon:"layers"},
     {label:"En ligne",value:online,color:T.green,icon:"spark"},
@@ -3049,8 +3111,8 @@ function DashboardHome({ user, projects, onGo, onOpen }) {
         </div>
         {/* Activité récente */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-          <div style={{fontSize:12,fontWeight:700,color:T.inkFaint,letterSpacing:"0.07em",textTransform:"uppercase"}}>Vos projets récents</div>
-          {projects.length>0&&<button onClick={()=>onGo("projects")} style={{background:"transparent",border:"none",color:T.indigo,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:FONT_DISPLAY}}>Tout voir</button>}
+          <div style={{fontSize:12,fontWeight:700,color:T.inkFaint,letterSpacing:"0.07em",textTransform:"uppercase"}}>{showAll?"Tous vos projets":"Vos projets récents"}</div>
+          {projects.length>4&&<button onClick={()=>setShowAll(v=>!v)} style={{background:"transparent",border:"none",color:T.indigo,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:FONT_DISPLAY}}>{showAll?"Réduire":"Tout voir"}</button>}
         </div>
         {recent.length===0?(
           <div style={{background:T.surface,border:`1px dashed ${T.line}`,borderRadius:16,padding:"36px 20px",textAlign:"center"}}>
@@ -3060,13 +3122,19 @@ function DashboardHome({ user, projects, onGo, onOpen }) {
         ):(
           <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${isWide?250:150}px,1fr))`,gap:14}}>
             {recent.map(p=>(
-              <button key={p.id} onClick={()=>onOpen(p)} style={{textAlign:"left",background:T.surface,border:`1px solid ${T.line}`,borderRadius:14,overflow:"hidden",cursor:"pointer",transition:TRANS,boxShadow:T.shadowSm,padding:0}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=T.shadowLg;}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=T.shadowSm;}}>
-                <div style={{height:90,background:`linear-gradient(135deg,${T.indigoSoft},${T.goldSoft})`,display:"flex",alignItems:"center",justifyContent:"center",color:T.indigo,opacity:0.85}}><Icon name="layers" size={28}/></div>
-                <div style={{padding:"12px 14px"}}>
-                  <div style={{fontSize:13.5,fontWeight:700,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
-                  <div style={{fontSize:11,color:T.inkFaint,marginTop:3}}>{p.time}</div>
+              <div key={p.id} style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:14,overflow:"hidden",transition:TRANS,boxShadow:T.shadowSm,position:"relative"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=T.shadowLg;}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=T.shadowSm;}}>
+                <div onClick={()=>onOpen(p)} style={{cursor:"pointer"}}>
+                  <div style={{height:90,background:`linear-gradient(135deg,${T.indigoSoft},${T.goldSoft})`,display:"flex",alignItems:"center",justifyContent:"center",color:T.indigo,opacity:0.85,position:"relative"}}>
+                    <Icon name="layers" size={28}/>
+                    {p.deployUrl&&<div style={{position:"absolute",top:8,right:8}}><Badge color={T.green} soft={T.greenSoft}>En ligne</Badge></div>}
+                  </div>
+                  <div style={{padding:"12px 14px"}}>
+                    <div style={{fontSize:13.5,fontWeight:700,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
+                    <div style={{fontSize:11,color:T.inkFaint,marginTop:3}}>{p.time}</div>
+                  </div>
                 </div>
-              </button>
+                {showAll&&onDelete&&<button onClick={()=>onDelete(p.id)} title="Supprimer" style={{position:"absolute",top:8,left:8,width:26,height:26,background:"rgba(255,255,255,0.92)",border:`1px solid ${T.line}`,borderRadius:8,color:T.inkFaint,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="x" size={12}/></button>}
+              </div>
             ))}
           </div>
         )}
@@ -3381,7 +3449,7 @@ export default function App() {
   if(!consented) return <><GlobalStyle/><ConsentScreen onAccepted={()=>setConsented(true)}/></>;
   if(!user) return <><GlobalStyle/><AuthScreen onAuth={async u=>{ if(backend.enabled()){ await backend.auth(u.id,u.email); } setUser(u); ls.set("ab7_user",u); }}/></>;
 
-  const NAV=[["home","spark","Accueil"],["dashboard","grid","Tableau de bord"],["builder","spark","Build Studio"],["templates","layers","Solutions"],["projects","folder","Projets"],["images","wand","Executive Studio"],["marketplace","grid","Agents"],["advisors","spark","Directeurs IA"],["business_memory","folder","Mon Entreprise"],["community_feed","folder","Communauté"],["support","comments","Aide & Support"],["payments","card","Paiements"]];
+  const NAV=[["home","spark","Accueil"],["dashboard","grid","Tableau de bord"],["builder","spark","Build Studio"],["templates","layers","Templates"],["images","wand","Executive Studio"],["marketplace","grid","Agents"],["advisors","spark","Directeurs IA"],["business_memory","folder","Mon Entreprise"],["community_feed","folder","Communauté"],["support","comments","Aide & Support"],["payments","card","Paiements"]];
 
   return (
     <div style={{display:"flex",height:"100vh",background:T.surfaceAlt,fontFamily:FONT,overflow:"hidden",color:T.ink}}>
@@ -3458,17 +3526,17 @@ export default function App() {
         {view==="templates"?(
           <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
             <div style={{maxWidth:1140,margin:"0 auto",padding:isWide?"32px 36px":"24px 18px"}}>
-              <div style={{marginBottom:6}}><div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em"}}>Quel problème veux-tu résoudre ?</div><div style={{fontSize:14,color:T.inkSoft,marginTop:4,lineHeight:1.55}}>Choisis ton besoin business. Jenga génère l'application complète : workflows, tableaux de bord, KPI et rapports.</div></div>
+              <div style={{marginBottom:6}}><div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em"}}>Templates</div><div style={{fontSize:14,color:T.inkSoft,marginTop:4,lineHeight:1.55}}>Choisis un modèle prêt à lancer. Jenga génère l'application complète : workflows, tableaux de bord, KPI et rapports.</div></div>
               <div className="ab-stagger" style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${isWide?300:160}px,1fr))`,gap:18,marginTop:24}}>
-                {SOLUTIONS.map(s=>(
+                {SOLUTIONS.map((s,idx)=>(
                   <div key={s.id} onClick={()=>{setView("builder");setPrompt(s.prompt);setTimeout(()=>generate(s.prompt),60);}} style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:16,overflow:"hidden",cursor:"pointer",transition:TRANS,position:"relative",boxShadow:T.shadowSm}} onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.shadowLg;e.currentTarget.style.transform="translateY(-3px)"}} onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.shadowSm;e.currentTarget.style.transform="translateY(0)"}}>
                     {s.impact>=5&&<div style={{position:"absolute",top:13,right:13,zIndex:2}}><Badge color={T.gold} soft={T.goldSoft}>Fort impact</Badge></div>}
-                    <div style={{height:100,background:`linear-gradient(135deg,${s.color}16,${s.color}05)`,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:52,height:52,borderRadius:16,background:`linear-gradient(145deg,${s.color},${s.color}D0)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,fontFamily:FONT_DISPLAY,boxShadow:`0 6px 16px ${s.color}40`}}>{s.letter}</div></div>
+                    <TemplatePreview color={s.color} letter={s.letter} variant={idx%4}/>
                     <div style={{padding:"16px 18px"}}>
                       <div style={{fontSize:16,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,marginBottom:6,letterSpacing:"-0.01em"}}>{s.problem}</div>
                       <div style={{display:"inline-block",fontSize:10,fontWeight:700,color:s.color,background:s.color+"13",padding:"3px 10px",borderRadius:20,marginBottom:10}}>{s.gain}</div>
                       <div style={{fontSize:13,color:T.inkSoft,lineHeight:1.6,marginBottom:15}}>{s.desc}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:7,color:s.color,fontSize:13,fontWeight:700}}><Icon name="spark" size={15}/>Générer ma solution</div>
+                      <div style={{display:"flex",alignItems:"center",gap:7,color:s.color,fontSize:13,fontWeight:700}}><Icon name="spark" size={15}/>Utiliser ce template</div>
                     </div>
                   </div>
                 ))}
@@ -3480,9 +3548,7 @@ export default function App() {
         ):view==="images"?(
           <ImageStudio userPlan={user?.plan||"free"} model={AI_TIERS[(user?.plan==="pro"||user?.plan==="business")?"power":(planData?.ai||"balanced")]?.id||MODEL} memCtx={businessMemory.context()} onCredit={(cost)=>{ if((user?.credits||0)<cost){ setNoCreditsFor({action:"advisor",cost}); return false; } setUser(u=>({...u,credits:Math.max(0,(u?.credits||0)-cost)})); return true; }}/>
         ):view==="dashboard"?(
-          <DashboardHome user={user} projects={projects} onGo={(v)=>{ if(v==="builder"){setView("builder");setPhase("idle");setResult(null);setLiveCode(null);setPrompt("");} else setView(v); }} onOpen={openProject}/>
-        ):view==="projects"?(
-          <DashboardView user={user} projects={projects} storageWarning={storageWarning} onOpen={openProject} onDelete={id=>setProjects(prev=>prev.filter(p=>p.id!==id))} onNew={()=>{setView("builder");setPhase("idle");setResult(null);setLiveCode(null);setPrompt("");}}/>
+          <DashboardHome user={user} projects={projects} onGo={(v)=>{ if(v==="builder"){setView("builder");setPhase("idle");setResult(null);setLiveCode(null);setPrompt("");} else setView(v); }} onOpen={openProject} onDelete={id=>setProjects(prev=>prev.filter(p=>p.id!==id))}/>
         ):view==="marketplace"?(
           <div style={{flex:1,overflow:"auto",background:T.surfaceAlt}}>
             <div style={{maxWidth:1140,margin:"0 auto",padding:isWide?"32px 36px":"24px 18px"}}>
@@ -3643,7 +3709,7 @@ export default function App() {
                   )}
                   {supportChat.map((m,i)=>(
                     <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                      <div style={{maxWidth:"86%",padding:"12px 15px",borderRadius:m.role==="user"?"16px 16px 5px 16px":"16px 16px 16px 5px",background:m.role==="user"?T.indigo:T.surfaceAlt,color:m.role==="user"?"#fff":T.ink,fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{m.text}</div>
+                      <div style={{maxWidth:"86%",padding:"12px 15px",borderRadius:m.role==="user"?"16px 16px 5px 16px":"16px 16px 16px 5px",background:m.role==="user"?T.indigo:T.surfaceAlt,color:m.role==="user"?"#fff":T.ink,fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{m.role==="bot"?<FadeWords text={m.text} animate={i===supportChat.length-1}/>:m.text}</div>
                     </div>
                   ))}
                   {supportBusy&&<div style={{display:"flex",gap:7,alignItems:"center",color:T.inkFaint,fontSize:13}}><div style={{width:14,height:14,border:`2px solid ${T.indigo}44`,borderTopColor:T.indigo,borderRadius:"50%",animation:"abspin .8s linear infinite"}}/>L'assistant écrit…</div>}
@@ -3741,7 +3807,7 @@ export default function App() {
                 <div style={{fontSize:13,color:T.inkSoft,marginBottom:16}}>1 visuel chez un graphiste coûte 5 000 à 15 000 FCFA. Ici, à partir de 70 F.</div>
                 <div style={{display:"grid",gridTemplateColumns:isWide?"repeat(3,1fr)":"1fr",gap:12}}>
                   {VISUAL_PACKS.map(pk=><div key={pk.visuals} style={{padding:18,background:pk.best?"#FCEEFF":T.surfaceAlt,border:`1.5px solid ${pk.best?"#E879F9":pk.popular?"#E879F966":T.line}`,borderRadius:12,cursor:"pointer",position:"relative"}}>{pk.best&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)"}}><Badge color="#C026D3" soft={T.surface}>Meilleure offre</Badge></div>}{pk.popular&&!pk.best&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)"}}><Badge color={T.green} soft={T.surface}>Populaire</Badge></div>}<div style={{fontSize:28,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,letterSpacing:"-0.03em"}}>{pk.visuals}</div><div style={{fontSize:12,color:T.inkFaint,marginBottom:8}}>visuels</div><div style={{fontSize:16,fontWeight:700,color:T.ink}}>{fmt(pk.price)} F</div><div style={{fontSize:11,color:pk.best?"#C026D3":T.inkFaint,marginTop:4,fontWeight:pk.best?700:400}}>{pk.per} F / visuel{pk.per<100?` · −${Math.round((1-pk.per/100)*100)}%`:""}</div></div>)}
-
+                
               {/* Parrainage — gagne des crédits (comme Dropbox/Lovable) */}
               <div style={{marginTop:18,background:`linear-gradient(135deg,${T.indigoSoft},#fff)`,border:`1px solid ${T.indigo}33`,borderRadius:16,padding:24}}>
                 <div style={{fontSize:16,fontWeight:800,color:T.ink,fontFamily:FONT_DISPLAY,marginBottom:4}}>Parraine, gagne des credits</div>
